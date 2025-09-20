@@ -1,0 +1,99 @@
+import psycopg2
+from psycopg2 import sql
+
+class Database:
+    def __init__(self, db_params):
+        self.conn = psycopg2.connect(**db_params)
+        self.cur = self.conn.cursor()
+
+    def close(self):
+        self.cur.close()
+        self.conn.close()
+
+    # region CRUD for Employees
+    def create_employee(self, name, manager_id):
+        self.cur.execute("INSERT INTO employees (employee_name, manager_id) VALUES (%s, %s)", (name, manager_id))
+        self.conn.commit()
+
+    def get_employees(self):
+        self.cur.execute("SELECT * FROM employees")
+        return self.cur.fetchall()
+
+    def get_employee_by_id(self, employee_id):
+        self.cur.execute("SELECT * FROM employees WHERE employee_id = %s", (employee_id,))
+        return self.cur.fetchone()
+    # endregion
+
+    # region CRUD for Managers
+    def create_manager(self, name):
+        self.cur.execute("INSERT INTO managers (manager_name) VALUES (%s)", (name,))
+        self.conn.commit()
+
+    def get_managers(self):
+        self.cur.execute("SELECT * FROM managers")
+        return self.cur.fetchall()
+    # endregion
+
+    # region CRUD for Goals
+    def create_goal(self, employee_id, description, due_date, status):
+        self.cur.execute("INSERT INTO goals (employee_id, goal_description, due_date, status) VALUES (%s, %s, %s, %s)",
+                         (employee_id, description, due_date, status))
+        self.conn.commit()
+
+    def get_goals_for_employee(self, employee_id):
+        self.cur.execute("SELECT * FROM goals WHERE employee_id = %s", (employee_id,))
+        return self.cur.fetchall()
+
+    def update_goal_status(self, goal_id, status):
+        self.cur.execute("UPDATE goals SET status = %s WHERE goal_id = %s", (status, goal_id))
+        self.conn.commit()
+    # endregion
+
+    # region CRUD for Tasks
+    def create_task(self, goal_id, description, status):
+        self.cur.execute("INSERT INTO tasks (goal_id, task_description, task_status) VALUES (%s, %s, %s)",
+                         (goal_id, description, status))
+        self.conn.commit()
+
+    def get_tasks_for_goal(self, goal_id):
+        self.cur.execute("SELECT * FROM tasks WHERE goal_id = %s", (goal_id,))
+        return self.cur.fetchall()
+    # endregion
+
+    # region CRUD for Feedback
+    def create_feedback(self, goal_id, feedback_text):
+        self.cur.execute("INSERT INTO feedback (goal_id, feedback_text) VALUES (%s, %s)", (goal_id, feedback_text))
+        self.conn.commit()
+
+    def get_feedback_for_goal(self, goal_id):
+        self.cur.execute("SELECT * FROM feedback WHERE goal_id = %s", (goal_id,))
+        return self.cur.fetchall()
+    # endregion
+
+    # region Business Insights
+    def get_goal_count_by_status(self):
+        self.cur.execute("SELECT status, COUNT(*) FROM goals GROUP BY status")
+        return self.cur.fetchall()
+
+    def get_average_goals_per_employee(self):
+        self.cur.execute("SELECT AVG(goal_count) FROM (SELECT COUNT(goal_id) AS goal_count FROM goals GROUP BY employee_id) AS subquery")
+        return self.cur.fetchone()[0]
+
+    def get_min_max_due_date(self):
+        self.cur.execute("SELECT MIN(due_date), MAX(due_date) FROM goals")
+        return self.cur.fetchone()
+    # endregion
+
+if __name__ == '__main__':
+    # Example usage (for testing)
+    db_params = {
+        'dbname': 'performance_management',
+        'user': 'your_username',
+        'password': 'your_password',
+        'host': 'localhost',
+        'port': '5432'
+    }
+    db = Database(db_params)
+    print("Employees:", db.get_employees())
+    print("Managers:", db.get_managers())
+    db.close()
