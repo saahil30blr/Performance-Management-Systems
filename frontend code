@@ -1,0 +1,91 @@
+import streamlit as st
+from backend import Database
+
+# --- Database Connection ---
+db_params = {
+    'dbname': 'performance_management',
+    'user': 'your_username',
+    'password': 'your_password',
+    'host': 'localhost',
+    'port': '5432'
+}
+db = Database(db_params)
+
+# --- App ---
+st.title("Performance Management System")
+
+# --- User Role Selection ---
+user_role = st.sidebar.selectbox("Select your role", ["Manager", "Employee"])
+
+if user_role == "Manager":
+    st.header("Manager Dashboard")
+    manager_id = st.selectbox("Select Manager", [m[0] for m in db.get_managers()], format_func=lambda x: [m[1] for m in db.get_managers() if m[0] == x][0])
+    employees = [e for e in db.get_employees() if e[2] == manager_id]
+    employee_id = st.selectbox("Select Employee", [e[0] for e in employees], format_func=lambda x: [e[1] for e in employees if e[0] == x][0])
+
+    # --- Goal & Task Setting ---
+    st.subheader("Set New Goal")
+    goal_desc = st.text_input("Goal Description")
+    due_date = st.date_input("Due Date")
+    status = st.selectbox("Status", ['Draft', 'In Progress', 'Completed', 'Cancelled'])
+    if st.button("Add Goal"):
+        db.create_goal(employee_id, goal_desc, due_date, status)
+        st.success("Goal added successfully!")
+
+    # --- Progress Tracking ---
+    st.subheader("Employee Goals")
+    goals = db.get_goals_for_employee(employee_id)
+    for goal in goals:
+        st.write(f"**Goal:** {goal[2]} | **Due:** {goal[3]} | **Status:** {goal[4]}")
+        new_status = st.selectbox("Update Status", ['Draft', 'In Progress', 'Completed', 'Cancelled'], key=f"status_{goal[0]}", index=['Draft', 'In Progress', 'Completed', 'Cancelled'].index(goal[4]))
+        if st.button("Update Goal Status", key=f"update_{goal[0]}"):
+            db.update_goal_status(goal[0], new_status)
+            st.success(f"Goal {goal[0]} status updated!")
+
+        # --- Feedback ---
+        st.subheader(f"Feedback for Goal: {goal[2]}")
+        feedback_text = st.text_area("Provide Feedback", key=f"feedback_{goal[0]}")
+        if st.button("Add Feedback", key=f"add_feedback_{goal[0]}"):
+            db.create_feedback(goal[0], feedback_text)
+            st.success("Feedback added!")
+
+        feedbacks = db.get_feedback_for_goal(goal[0])
+        for feedback in feedbacks:
+            st.write(f"- {feedback[2]} (on {feedback[3]})")
+
+
+elif user_role == "Employee":
+    st.header("Employee Dashboard")
+    employee_id = st.selectbox("Select Employee", [e[0] for e in db.get_employees()], format_func=lambda x: [e[1] for e in db.get_employees() if e[0] == x][0])
+
+    # --- View Goals ---
+    st.subheader("My Goals")
+    goals = db.get_goals_for_employee(employee_id)
+    for goal in goals:
+        st.write(f"**Goal:** {goal[2]} | **Due:** {goal[3]} | **Status:** {goal[4]}")
+
+        # --- Log Tasks ---
+        st.subheader(f"Tasks for Goal: {goal[2]}")
+        task_desc = st.text_input("Task Description", key=f"task_desc_{goal[0]}")
+        task_status = st.selectbox("Task Status", ['To Do', 'In Progress', 'Done'], key=f"task_status_{goal[0]}")
+        if st.button("Log Task", key=f"log_task_{goal[0]}"):
+            db.create_task(goal[0], task_desc, task_status)
+            st.success("Task logged!")
+
+        tasks = db.get_tasks_for_goal(goal[0])
+        for task in tasks:
+            st.write(f"- {task[2]} ({task[3]})")
+
+# --- Business Insights ---
+st.sidebar.title("Business Insights")
+st.sidebar.subheader("Goal Status Distribution")
+goal_status_counts = db.get_goal_count_by_status()
+st.sidebar.bar_chart({status: count for status, count in goal_status_counts})
+
+avg_goals = db.get_average_goals_per_employee()
+st.sidebar.metric("Average Goals per Employee", f"{avg_goals:.2f}")
+
+min_date, max_date = db.get_min_max_due_date()
+st.sidebar.write(f"**Goal Due Dates Range:** {min_date} to {max_date}")
+
+db.close()
